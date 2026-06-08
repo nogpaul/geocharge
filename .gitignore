@@ -1,0 +1,7 @@
+# Don't commit large/changing data
+data/
+# Don't commit secrets or local config
+.env
+# Python venvs and caches (we'll need this later)
+.venv/
+__pycache__/
