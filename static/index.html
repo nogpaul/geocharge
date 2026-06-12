@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GeoCharge — EV charging stations in Germany</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css" rel="stylesheet">
+  <style>
+    body { margin: 0; }
+    #map { position: absolute; inset: 0; }
+    #hint {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      background: white; padding: 6px 14px; border-radius: 6px;
+      font-family: sans-serif; font-size: 14px; z-index: 1;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="hint">Click anywhere to find the nearest charging stations</div>
+  <div id="map"></div>
+
+  <script>
+    const map = new maplibregl.Map({
+      container: "map",
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: "raster",
+            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            attribution: "© OpenStreetMap contributors"
+          }
+        },
+        layers: [{ id: "osm", type: "raster", source: "osm" }]
+      },
+      center: [13.3777, 52.5163],   // [lon, lat] — Brandenburg Gate
+      zoom: 13
+    });
+
+    let markers = [];
+
+    map.on("click", async (e) => {
+      const { lng, lat } = e.lngLat;
+
+      const resp = await fetch(
+        `/stations/nearby?lat=${lat}&lon=${lng}&limit=20`
+      );
+      const geojson = await resp.json();
+
+      markers.forEach(m => m.remove());
+      markers = geojson.features.map(f => {
+        const p = f.properties;
+        const popup = new maplibregl.Popup({ offset: 12 }).setHTML(
+          `<strong>${p.operator}</strong><br>
+           ${p.street} ${p.house_number}, ${p.city}<br>
+           ${p.station_type}, ${p.rated_power_kw} kW<br>
+           ${p.distance_m} m away`
+        );
+        return new maplibregl.Marker()
+          .setLngLat(f.geometry.coordinates)
+          .setPopup(popup)
+          .addTo(map);
+      });
+    });
+  </script>
+</body>
+</html>
