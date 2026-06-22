@@ -1,11 +1,7 @@
-# Pinned to the exact versions proven on the server deploy (2026-06).
-# Regenerate with: pip freeze > requirements.txt
-# Rebuild an environment with: pip install -r requirements.txt
-numpy==2.5.0
+# Direct dependencies only — pip resolves the rest.
+# Lean production set: no dev-convenience bundle (fastapi[standard]).
+fastapi==0.138.0
+uvicorn[standard]==0.49.0
+psycopg[binary]==3.3.4
 pandas==3.0.3
-psycopg==3.3.4
-psycopg-binary==3.3.4
-python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
-six==1.17.0
-typing_extensions==4.15.0
