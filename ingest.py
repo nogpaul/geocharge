@@ -34,6 +34,8 @@ if not xlsx_candidates:
 DATA_PATH = xlsx_candidates[0]
 print(f"Reading {DATA_PATH.name}")
 
+load_dotenv(PROJECT_ROOT / ".env")  # load .env from the script's own dir
+
 DB_CONN_STRING = (
     f"host={os.environ['DB_HOST']} "
     f"port={os.environ['DB_PORT']} "
