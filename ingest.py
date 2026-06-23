@@ -22,18 +22,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 # Pick the most recently modified Ladesaeulenregister file in data/.
-# This way we don't hardcode a filename that changes each release.
-csv_candidates = sorted(
-    DATA_DIR.glob("Ladesaeulenregister_BNetzA_*.csv"),
+# The Bundesnetzagentur publishes the current registry as .xlsx
+# (the .csv export is stale), so we read the Excel file.
+xlsx_candidates = sorted(
+    DATA_DIR.glob("Ladesaeulenregister_BNetzA_*.xlsx"),
     key=lambda p: p.stat().st_mtime,
     reverse=True,
 )
-if not csv_candidates:
-    sys.exit("No Ladesaeulenregister CSV found in data/.")
-CSV_PATH = csv_candidates[0]
-print(f"Reading {CSV_PATH.name}")
-
-load_dotenv()  # reads .env into os.environ
+if not xlsx_candidates:
+    sys.exit("No Ladesaeulenregister .xlsx found in data/.")
+DATA_PATH = xlsx_candidates[0]
+print(f"Reading {DATA_PATH.name}")
 
 DB_CONN_STRING = (
     f"host={os.environ['DB_HOST']} "
@@ -45,19 +44,18 @@ DB_CONN_STRING = (
 
 # --- Extract -------------------------------------------------------------
 
-# The German CSV: Windows-1252 encoding, semicolon separator,
-# comma as decimal mark, 9 metadata rows before the real header.
-df = pd.read_csv(
-    CSV_PATH,
-    encoding="cp1252",
-    sep=";",
-    decimal=",",
+# The Excel file: rows 0-9 are metadata/notes, row 10 is the real header.
+# Unlike the CSV, xlsx stores typed values natively, so no encoding,
+# separator, or decimal-mark handling is needed. We still force dtype=str
+# and keep_default_na=False so we parse every value explicitly ourselves.
+df = pd.read_excel(
+    DATA_PATH,
     skiprows=10,
-    dtype=str,            # read everything as text first, parse explicitly later
-    keep_default_na=False, # treat empty cells as "" not NaN — we control nulls ourselves
+    dtype=str,
+    keep_default_na=False,
 )
 
-print(f"Read {len(df):,} rows from CSV")
+print(f"Read {len(df):,} rows from spreadsheet")
 
 # --- Transform -----------------------------------------------------------
 
@@ -89,13 +87,20 @@ def parse_german_number(s: str) -> float | None:
         return None
     return float(s.replace(",", "."))
 
-def parse_german_date(s: str) -> str | None:
-    """Convert '11.01.2020' (DD.MM.YYYY) to ISO '2020-01-11'; '' to None."""
+def parse_date(s: str) -> str | None:
+    """Parse a commissioning date to ISO 'YYYY-MM-DD'; '' to None.
+
+    Handles both formats the source has used:
+      - German CSV style:   '11.01.2020'  (DD.MM.YYYY)
+      - Excel datetime style:'2020-01-11 00:00:00' (already ISO-ish)
+    """
     s = s.strip()
     if not s:
         return None
-    day, month, year = s.split(".")
-    return f"{year}-{month}-{day}"
+    if "." in s:                      # DD.MM.YYYY (legacy CSV)
+        day, month, year = s.split(".")
+        return f"{year}-{month}-{day}"
+    return s.split(" ")[0]            # '2020-01-11 00:00:00' -> '2020-01-11'
 
 def parse_int(s: str) -> int | None:
     s = s.strip()
@@ -105,7 +110,7 @@ def parse_int(s: str) -> int | None:
 df["id"]                = df["id"].map(parse_int)
 df["num_chargepoints"]  = df["num_chargepoints"].map(parse_int)
 df["rated_power_kw"]    = df["rated_power_kw"].map(parse_german_number)
-df["commissioned"]      = df["commissioned"].map(parse_german_date)
+df["commissioned"]      = df["commissioned"].map(parse_date)
 df["latitude"]          = df["latitude"].map(parse_german_number)
 df["longitude"]         = df["longitude"].map(parse_german_number)
 
